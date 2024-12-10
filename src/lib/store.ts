@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 
-interface FlipRecord {
+interface LocalFlipRecord {
   user: string;
   amount: number;
   won: boolean;
-  selectedSide: string;
-  result: string;
+  selectedSide: 'heads' | 'tails';
+  result: 'heads' | 'tails';
   timestamp: number;
 }
 
@@ -20,8 +20,8 @@ interface GameState {
   setSelectedSide: (side: 'heads' | 'tails' | null) => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
-  recentFlips: FlipRecord[];
-  addFlip: (flip: Omit<FlipRecord, 'timestamp'>) => void;
+  recentFlips: LocalFlipRecord[];
+  addFlip: (flip: Omit<LocalFlipRecord, 'timestamp'>) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({

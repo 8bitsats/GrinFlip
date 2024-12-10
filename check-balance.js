@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+
 import {
   getAccount,
   getAssociatedTokenAddress,
@@ -7,9 +9,16 @@ import {
   PublicKey,
 } from '@solana/web3.js';
 
-const HELIUS_RPC_URL = 'https://mainnet.helius-rpc.com/?api-key=6187a89e-d5e3-48ed-9904-600ae33a06fe';
+// Load the production environment variables
+dotenv.config({ path: '.env.production' });
+
+const HELIUS_RPC_URL = process.env.VITE_HELIUS_RPC_URL;
 const GRIN_TOKEN_MINT = new PublicKey('7JofsgKgD3MerQDa7hEe4dfkY3c3nMnsThZzUuYyTFpE');
 const HOUSE_WALLET = new PublicKey('HWewatuN4dvmcEjbNw3qBeGnvJ5NG28ATih9CtitNJgC');
+
+if (!HELIUS_RPC_URL) {
+    throw new Error('HELIUS_RPC_URL not found in environment variables');
+}
 
 async function checkBalance() {
     try {
@@ -25,7 +34,7 @@ async function checkBalance() {
         
         try {
             const account = await getAccount(connection, ata);
-            console.log('GRIN Balance:', Number(account.amount) / Math.pow(10, 9));
+            console.log('GRIN Balance:', Number(account.amount) / (10 ** 9));
         } catch (e) {
             console.log('No ATA found - needs to be created');
         }

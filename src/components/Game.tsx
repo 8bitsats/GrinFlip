@@ -23,13 +23,20 @@ import {
 } from '../lib/provably-fair';
 import { SoundManager } from '../lib/sounds';
 import { useGameStore } from '../lib/store';
+import { recordFlip } from '../lib/supabase';
 import {
   getGrinBalance,
   placeBet,
   processPayout,
 } from '../lib/token';
 import { CoinFlip } from './CoinFlip';
+import { Leaderboard } from './Leaderboard';
 import { Logo } from './Logo';
+import { RecentFlips } from './RecentFlips';
+
+// Betting limits
+const MIN_BET = 0.1;
+const MAX_BET = 100;
 
 export function Game() {
   const { connection } = useConnection();
@@ -110,8 +117,13 @@ export function Game() {
         return;
       }
 
-      if (betAmount <= 0) {
-        setError('Please enter a valid bet amount');
+      if (betAmount < MIN_BET) {
+        setError(`Minimum bet is ${MIN_BET} GRIN`);
+        return;
+      }
+
+      if (betAmount > MAX_BET) {
+        setError(`Maximum bet is ${MAX_BET} GRIN`);
         return;
       }
 
@@ -143,6 +155,20 @@ export function Game() {
         await processPayout(connection, wallet, betAmount * 2);
       }
 
+      // Record flip in Supabase
+      if (publicKey) {
+        try {
+          await recordFlip(
+            publicKey.toString(),
+            gameResult.result,
+            betAmount,
+            won
+          );
+        } catch (err: unknown) {
+          console.error('Error recording flip:', err);
+        }
+      }
+
       setTimeout(() => {
         setIsFlipping(false);
         setIsProcessing(false);
@@ -156,7 +182,7 @@ export function Game() {
         }
         
         addFlip({
-          user: publicKey?.toString().slice(0, 4) + '...' || 'Unknown',
+          user: `${publicKey?.toString().slice(0, 4)}...` || 'Unknown',
           amount: betAmount,
           won,
           selectedSide,
@@ -165,17 +191,18 @@ export function Game() {
         
         setSelectedSide(null);
       }, 3000);
-    } catch (err: any) {
-      setError(err.message || 'An error occurred while processing the transaction');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred while processing the transaction');
       setIsFlipping(false);
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
         <button
+          type="button"
           onClick={toggleSound}
           className="p-2 rounded-full hover:bg-white/10 transition-colors"
         >
@@ -213,90 +240,87 @@ export function Game() {
         </div>
       )}
 
-      <div className="glass-panel rounded-xl p-8 mb-8">
-        <div className="mb-8">
-          <CoinFlip 
-            isFlipping={isFlipping} 
-            result={selectedSide} 
-            soundEnabled={soundEnabled}
-          />
-        </div>
-
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex gap-4 mb-4">
-            <button
-              onClick={() => setSelectedSide('heads')}
-              disabled={isProcessing}
-              className={`px-6 py-2 rounded-lg transition-all glow-button ${
-                selectedSide === 'heads'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/5 hover:bg-white/10'
-              } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Heads
-            </button>
-            <button
-              onClick={() => setSelectedSide('tails')}
-              disabled={isProcessing}
-              className={`px-6 py-2 rounded-lg transition-all glow-button ${
-                selectedSide === 'tails'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/5 hover:bg-white/10'
-              } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Tails
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={betAmount}
-              onChange={(e) => setBetAmount(Number(e.target.value))}
-              min="0.1"
-              step="0.1"
-              disabled={isProcessing}
-              className="w-32 px-4 py-2 rounded-lg bg-white/5 text-center disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <span className="neon-text-green">GRIN</span>
-          </div>
-
-          <button
-            onClick={handleFlip}
-            disabled={!connected || isFlipping || !selectedSide || isProcessing}
-            className="px-8 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95 glow-button"
-          >
-            {isProcessing ? 'Processing...' : isFlipping ? 'Flipping...' : 'Flip Coin'}
-          </button>
-
-          {lastGameResult && (
-            <div className="mt-4 text-sm text-gray-400">
-              <p>Last Game Hash: <span className="text-purple-400">{lastGameResult.hash.slice(0, 10)}...</span></p>
-              <p>Server Seed: <span className="text-green-400">{lastGameResult.serverSeed.slice(0, 10)}...</span></p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <div className="glass-panel rounded-xl p-8 mb-8">
+            <div className="mb-8">
+              <CoinFlip 
+                isFlipping={isFlipping} 
+                result={selectedSide} 
+                soundEnabled={soundEnabled}
+              />
             </div>
-          )}
-        </div>
-      </div>
 
-      <div className="glass-panel rounded-xl p-6">
-        <h2 className="text-xl font-bold mb-4 neon-text-purple">Recent Flips</h2>
-        <div className="space-y-3">
-          {recentFlips.map((flip, index) => (
-            <div
-              key={index}
-              className="flex justify-between items-center p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-purple-400">{flip.user}</span>
-                <span className={flip.won ? 'neon-text-green' : 'text-red-400'}>
-                  {flip.won ? 'Won' : 'Lost'} {flip.amount} GRIN
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex gap-4 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSide('heads')}
+                  disabled={isProcessing}
+                  className={`px-6 py-2 rounded-lg transition-all glow-button ${
+                    selectedSide === 'heads'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white/5 hover:bg-white/10'
+                  } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Heads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSide('tails')}
+                  disabled={isProcessing}
+                  className={`px-6 py-2 rounded-lg transition-all glow-button ${
+                    selectedSide === 'tails'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white/5 hover:bg-white/10'
+                  } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  Tails
+                </button>
+              </div>
+
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={betAmount}
+                    onChange={(e) => setBetAmount(Number(e.target.value))}
+                    min={MIN_BET}
+                    max={MAX_BET}
+                    step="0.1"
+                    disabled={isProcessing}
+                    className="w-32 px-4 py-2 rounded-lg bg-white/5 text-center disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <span className="neon-text-green">GRIN</span>
+                </div>
+                <span className="text-sm text-gray-400">
+                  Min: {MIN_BET} GRIN | Max: {MAX_BET} GRIN
                 </span>
               </div>
-              <span className="text-sm text-gray-400">
-                {Math.floor((Date.now() - flip.timestamp) / 1000)}s ago
-              </span>
+
+              <button
+                type="button"
+                onClick={handleFlip}
+                disabled={!connected || isFlipping || !selectedSide || isProcessing}
+                className="px-8 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95 glow-button"
+              >
+                {isProcessing ? 'Processing...' : isFlipping ? 'Flipping...' : 'Flip Coin'}
+              </button>
+
+              {lastGameResult && (
+                <div className="mt-4 text-sm text-gray-400">
+                  <p>Last Game Hash: <span className="text-purple-400">{lastGameResult.hash.slice(0, 10)}...</span></p>
+                  <p>Server Seed: <span className="text-green-400">{lastGameResult.serverSeed.slice(0, 10)}...</span></p>
+                </div>
+              )}
             </div>
-          ))}
+          </div>
+
+          <RecentFlips />
+        </div>
+
+        <div className="lg:col-span-1">
+          <Leaderboard />
         </div>
       </div>
     </div>
