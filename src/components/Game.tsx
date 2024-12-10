@@ -35,8 +35,8 @@ import { Logo } from './Logo';
 import { RecentFlips } from './RecentFlips';
 
 // Betting limits
-const MIN_BET = 0.1;
-const MAX_BET = 100;
+const MIN_BET = 1;
+const MAX_BET = 10000;
 
 export function Game() {
   const { connection } = useConnection();
@@ -80,7 +80,7 @@ export function Game() {
         setIsLoadingBalance(true);
         try {
           const balance = await getGrinBalance(publicKey.toString());
-          setGrinBalance(balance);
+          setGrinBalance(Math.floor(balance));
         } catch (err) {
           console.error('Error fetching balance:', err);
           toast.error('Failed to fetch GRIN balance');
@@ -117,17 +117,19 @@ export function Game() {
         return;
       }
 
-      if (betAmount < MIN_BET) {
+      const roundedBetAmount = Math.floor(betAmount);
+
+      if (roundedBetAmount < MIN_BET) {
         setError(`Minimum bet is ${MIN_BET} GRIN`);
         return;
       }
 
-      if (betAmount > MAX_BET) {
+      if (roundedBetAmount > MAX_BET) {
         setError(`Maximum bet is ${MAX_BET} GRIN`);
         return;
       }
 
-      if (betAmount > grinBalance) {
+      if (roundedBetAmount > grinBalance) {
         setError('Insufficient GRIN balance');
         return;
       }
@@ -146,13 +148,13 @@ export function Game() {
       setLastGameResult(gameResult);
 
       // Place bet
-      await placeBet(connection, wallet, betAmount);
+      await placeBet(connection, wallet, roundedBetAmount);
       
       const won = gameResult.result === selectedSide;
 
       // Process payout if won
       if (won) {
-        await processPayout(connection, wallet, betAmount * 2);
+        await processPayout(connection, wallet, roundedBetAmount * 2);
       }
 
       // Record flip in Supabase
@@ -161,7 +163,7 @@ export function Game() {
           await recordFlip(
             publicKey.toString(),
             gameResult.result,
-            betAmount,
+            roundedBetAmount,
             won
           );
         } catch (err: unknown) {
@@ -175,15 +177,15 @@ export function Game() {
         
         if (won) {
           SoundManager.playWin(soundEnabled);
-          toast.success(`You won ${betAmount * 2} GRIN!`);
+          toast.success(`You won ${roundedBetAmount * 2} GRIN!`);
         } else {
           SoundManager.playLose(soundEnabled);
-          toast.error(`You lost ${betAmount} GRIN`);
+          toast.error(`You lost ${roundedBetAmount} GRIN`);
         }
         
         addFlip({
           user: `${publicKey?.toString().slice(0, 4)}...` || 'Unknown',
-          amount: betAmount,
+          amount: roundedBetAmount,
           won,
           selectedSide,
           result: gameResult.result
@@ -232,7 +234,7 @@ export function Game() {
               <span className="inline-block w-4 h-4 border-2 border-purple-400/20 border-t-purple-400 rounded-full animate-spin" />
             ) : (
               <span>
-                <span className="font-bold neon-text-purple">{grinBalance.toFixed(2)}</span>{' '}
+                <span className="font-bold neon-text-purple">{grinBalance}</span>{' '}
                 <span className="neon-text-green">GRIN</span>
               </span>
             )}
@@ -284,10 +286,10 @@ export function Game() {
                   <input
                     type="number"
                     value={betAmount}
-                    onChange={(e) => setBetAmount(Number(e.target.value))}
+                    onChange={(e) => setBetAmount(Math.floor(Number(e.target.value)))}
                     min={MIN_BET}
                     max={MAX_BET}
-                    step="0.1"
+                    step="1"
                     disabled={isProcessing}
                     className="w-32 px-4 py-2 rounded-lg bg-white/5 text-center disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />

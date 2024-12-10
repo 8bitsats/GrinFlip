@@ -27,8 +27,8 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   soundEnabled: true,
   toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
-  betAmount: 0.1,
-  setBetAmount: (amount) => set({ betAmount: amount }),
+  betAmount: 1,
+  setBetAmount: (amount) => set({ betAmount: Math.floor(amount) }),
   isFlipping: false,
   setIsFlipping: (flipping) => set({ isFlipping: flipping }),
   selectedSide: null,
